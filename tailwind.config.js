@@ -10,7 +10,10 @@ module.exports = {
         lg: "1024px",
       },
       colors: {
-       
+       darkPink:"#F0A8D0",
+       lightPink: "#F7B5CA",
+       peach: "#FFC6C6",
+       yellow: "#FFEBD4"
       },
     },
   },
