@@ -37,3 +37,13 @@ export const getColor = (color) => {
     }
     return '#F7B5CA';
 };
+
+export const debounce = (callback, waitTime) => {
+    let timer;
+    return (...args) => {
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+            callback(...args);
+        }, waitTime);
+    };
+};

@@ -13,7 +13,7 @@ const Modal = ({ character, onClose }) => {
                 <p><strong>Height:</strong> {character.height} meters</p>
                 <p><strong>Mass:</strong> {character.mass} kg</p>
                 <p><strong>Date Added:</strong> {character.created}</p>
-                <p><strong>Number of Films:</strong> {character.films}</p>
+                <p><strong>Number of Films:</strong> {character.filmsLength}</p>
                 <p><strong>Birth Year:</strong> {character.birth_year}</p>
                 <h3 className="text-xl font-bold mt-4">Home World</h3>
                 <p><strong>Name:</strong> {character.homeWorldName}</p>

@@ -1,15 +1,15 @@
+import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
-import React, { useState, useEffect } from 'react';
 import Card from '../components/Card/Card';
 import Modal from '../components/Modal/Modal';
 import Loader from '../components/Loader/Loader';
 import { formatDate, getRandomImage } from '../Util/Util';
 import Dropdown from '../components/DropDown/DropDown';
+import Input from '../components/Input/Input.jsx';
 
 const Home = () => {
-    const [starWarsCharacter, setStarWarsCharacter] = useState([]);
-    const [selectedCharacter, setSelectedCharacter] = useState([]);
-    const [filteredCharacters, setFilteredCharacters] = useState([]);
+    const [characters, setCharacters] = useState([]);
+    const [selectedCharacter, setSelectedCharacter] = useState(null);
     const [filters, setFilters] = useState({
         homeWorldNames: [],
         filmTitles: [],
@@ -22,28 +22,22 @@ const Home = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [searchInput, setSearchInput] = useState('');
 
+    useEffect(() => {
+        getStarWarsData();
+    }, []);
+
     const getStarWarsData = async () => {
         try {
             const response = await axios.get("https://swapi.dev/api/people/");
             const data = response.data.results;
-            console.log(data)
             const characterPromise = data.map(async character => {
                 const homeWorldResponse = await axios.get(character.homeworld);
                 const homeWorld = homeWorldResponse.data;
                 const { name, height, mass, skin_color: skinColor, birth_year: birthYear, films, species } = character;
                 const { name: homeWorldName, terrain, climate, residents } = homeWorld;
 
-                const speciesData = [];
-                for (const specieUrl of character.species) {
-                    const specieResponse = await axios.get(specieUrl);
-                    speciesData.push(specieResponse.data);
-                }
-
-                const filmsData = [];
-                for (const filmUrl of character.films) {
-                    const filmResponse = await axios.get(filmUrl);
-                    filmsData.push(filmResponse.data);
-                }
+                const speciesData = await Promise.all(character.species.map(specieUrl => axios.get(specieUrl).then(res => res.data)));
+                const filmsData = await Promise.all(character.films.map(filmUrl => axios.get(filmUrl).then(res => res.data)));
 
                 return {
                     name,
@@ -62,12 +56,12 @@ const Home = () => {
                 };
             });
             const characterQualities = await Promise.all(characterPromise);
+
             const uniqueHomeWorldNames = [...new Set(characterQualities.map(c => c.homeWorldName))];
             const uniqueFilmTitles = [...new Set(characterQualities.flatMap(c => c.filmsData.map(film => film.title)))];
             const uniqueSpeciesNames = [...new Set(characterQualities.flatMap(c => c.speciesData.map(species => species.name)))];
 
-            setStarWarsCharacter(characterQualities);
-            setFilteredCharacters(characterQualities);
+            setCharacters(characterQualities);
             setFilters(prevFilters => ({
                 ...prevFilters,
                 homeWorldNames: uniqueHomeWorldNames,
@@ -79,24 +73,18 @@ const Home = () => {
         } catch (err) {
             console.error("Can't fetch Data", err);
             setIsLoading(false);
-            throw new Error(err);
         }
     };
 
-    useEffect(() => {
-        getStarWarsData();
-    }, []);
-
-    useEffect(() => {
+    const filteredCharacters = useMemo(() => {
         const characterName = searchInput.toLowerCase();
-        const filtered = starWarsCharacter.filter(character =>
+        return characters.filter(character =>
             (filters.selectedHomeWorld === '' || character.homeWorldName === filters.selectedHomeWorld) &&
-            (filters.selectedFilm === '' || character.filmsData?.some(film => film.title === filters.selectedFilm)) &&
-            (filters.selectedSpecies === '' || character.speciesData?.some(species => species.name === filters.selectedSpecies)) &&
+            (filters.selectedFilm === '' || character.filmsData.some(film => film.title === filters.selectedFilm)) &&
+            (filters.selectedSpecies === '' || character.speciesData.some(species => species.name === filters.selectedSpecies)) &&
             character.name.toLowerCase().includes(characterName)
         );
-        setFilteredCharacters(filtered);
-    }, [searchInput, filters, starWarsCharacter]);
+    }, [searchInput, filters, characters]);
 
     const handleCardClick = (character) => {
         setSelectedCharacter(character);
@@ -115,17 +103,30 @@ const Home = () => {
         }));
     };
 
+    const clearFilters = () => {
+        setFilters(prevFilters => ({
+            ...prevFilters,
+            selectedHomeWorld: '',
+            selectedFilm: '',
+            selectedSpecies: ''
+        }));
+        setSearchInput('');
+    };
+
     return (
         <div className="bg-slate-200 p-6 shadow-lg">
             <h1 className="text-3xl font-bold text-center mb-6">Star Wars Characters</h1>
             <div className="mb-4 flex justify-center">
-                <input
-                    type="text"
-                    placeholder="Search by character name"
+                <Input
                     value={searchInput}
-                    onChange={(e) => setSearchInput(e.target.value)}
-                    className="p-2 border rounded w-60"
+                    onChange={setSearchInput}
                 />
+                <button 
+                    onClick={clearFilters}
+                    className="ml-4 p-2 border rounded bg-red-500 text-white"
+                >
+                    Clear Filters
+                </button>
             </div>
             {isLoading ? (
                 <div className='flex justify-center'>
@@ -158,16 +159,22 @@ const Home = () => {
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                        {filteredCharacters.map((character, index) => (
-                            <Card
-                                key={index}
-                                name={character.name}
-                                imageUrl={getRandomImage()}
-                                skinColor={character.skinColor}
-                                onClick={() => handleCardClick(character)}
-                                className="transition-transform transform hover:scale-105 hover:shadow-lg"
-                            />
-                        ))}
+                        {filteredCharacters.length === 0 ? (
+                            <div className="col-span-full text-center text-gray-700 font-semibold">
+                                Can't fetch items
+                            </div>
+                        ) : (
+                            filteredCharacters.map((character, index) => (
+                                <Card
+                                    key={index}
+                                    name={character.name}
+                                    imageUrl={getRandomImage()}
+                                    skinColor={character.skinColor}
+                                    onClick={() => handleCardClick(character)}
+                                    className="transition-transform transform hover:scale-105 hover:shadow-lg"
+                                />
+                            ))
+                        )}
                     </div>
                 </div>
             )}
