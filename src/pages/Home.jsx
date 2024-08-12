@@ -1,188 +1,162 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import axios from 'axios';
-import Card from '../components/Card/Card';
-import Modal from '../components/Modal/Modal';
-import Loader from '../components/Loader/Loader';
-import { formatDate, getRandomImage } from '../Util/Util';
-import Dropdown from '../components/DropDown/DropDown';
-import Input from '../components/Input/Input.jsx';
+// pages/Home.jsx
+import React, { useState, useMemo, useEffect } from "react";
+import { getStarWarsData } from "../api/http.jsx";
+import Card from "../components/Card/Card";
+import Modal from "../components/Modal/Modal";
+import Loader from "../components/Loader/Loader";
+import { filterCharacters, getRandomImage } from "../Util/Util";
+import { useFetch } from "../hooks/useFetch";
+import Header from "../components/Header/Header";
+
+import Pagination from "../components/Paginition/Paginition.jsx";
+import Filters from "../components/Filters/Filters.jsx";
+import SearchBar from "../components/SearchBar/SearchBar.jsx";
 
 const Home = () => {
-    const [characters, setCharacters] = useState([]);
-    const [selectedCharacter, setSelectedCharacter] = useState(null);
-    const [filters, setFilters] = useState({
-        homeWorldNames: [],
-        filmTitles: [],
-        speciesNames: [],
-        selectedHomeWorld: '',
-        selectedFilm: '',
-        selectedSpecies: ''
-    });
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [isLoading, setIsLoading] = useState(true);
-    const [searchInput, setSearchInput] = useState('');
+  const [searchInput, setSearchInput] = useState("");
+  const [selectedCharacter, setSelectedCharacter] = useState(null);
+  const [filters, setFilters] = useState({
+    homeWorldNames: [],
+    filmTitles: [],
+    speciesNames: [],
+    selectedHomeWorld: "",
+    selectedFilm: "",
+    selectedSpecies: "",
+  });
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
 
-    useEffect(() => {
-        getStarWarsData();
-    }, []);
+  const { isFetching, error, fetchData, totalPages } = useFetch(
+    getStarWarsData,
+    currentPage,
+    {
+      characterQualities: [],
+      homeWorldNames: [],
+      filmTitles: [],
+      speciesNames: [],
+    }
+  );
 
-    const getStarWarsData = async () => {
-        try {
-            const response = await axios.get("https://swapi.dev/api/people/");
-            const data = response.data.results;
-            const characterPromise = data.map(async character => {
-                const homeWorldResponse = await axios.get(character.homeworld);
-                const homeWorld = homeWorldResponse.data;
-                const { name, height, mass, skin_color: skinColor, birth_year: birthYear, films, species } = character;
-                const { name: homeWorldName, terrain, climate, residents } = homeWorld;
+  const { characterQualities, homeWorldNames, filmTitles, speciesNames } =
+    fetchData;
+    console.log(characterQualities)
 
-                const speciesData = await Promise.all(character.species.map(specieUrl => axios.get(specieUrl).then(res => res.data)));
-                const filmsData = await Promise.all(character.films.map(filmUrl => axios.get(filmUrl).then(res => res.data)));
+  useEffect(() => {
+    if (!isFetching && fetchData) {
+      setFilters({
+        homeWorldNames,
+        filmTitles,
+        speciesNames,
+        selectedHomeWorld: "",
+        selectedFilm: "",
+        selectedSpecies: "",
+      });
+    }
+  }, [isFetching, fetchData, homeWorldNames, filmTitles, speciesNames]);
 
-                return {
-                    name,
-                    height,
-                    mass,
-                    skinColor,
-                    birthYear,
-                    filmsLength: films.length,
-                    created: formatDate(character.created),
-                    homeWorldName,
-                    terrain,
-                    climate,
-                    residentsLength: residents.length,
-                    filmsData,
-                    speciesData
-                };
-            });
-            const characterQualities = await Promise.all(characterPromise);
+  const filteredCharacters = useMemo(() => {
+    return filterCharacters(characterQualities, filters, searchInput);
+  }, [searchInput, filters, characterQualities]);
 
-            const uniqueHomeWorldNames = [...new Set(characterQualities.map(c => c.homeWorldName))];
-            const uniqueFilmTitles = [...new Set(characterQualities.flatMap(c => c.filmsData.map(film => film.title)))];
-            const uniqueSpeciesNames = [...new Set(characterQualities.flatMap(c => c.speciesData.map(species => species.name)))];
+  const handleCardClick = (character) => {
+    setSelectedCharacter(character);
+    setIsModalOpen(true);
+  };
 
-            setCharacters(characterQualities);
-            setFilters(prevFilters => ({
-                ...prevFilters,
-                homeWorldNames: uniqueHomeWorldNames,
-                filmTitles: uniqueFilmTitles,
-                speciesNames: uniqueSpeciesNames
-            }));
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setSelectedCharacter(null);
+  };
 
-            setIsLoading(false);
-        } catch (err) {
-            console.error("Can't fetch Data", err);
-            setIsLoading(false);
-        }
-    };
+  const handleFilterChange = (key, value) => {
+    setFilters((prevFilters) => ({
+      ...prevFilters,
+      [key]: value,
+    }));
+  };
 
-    const filteredCharacters = useMemo(() => {
-        const characterName = searchInput.toLowerCase();
-        return characters.filter(character =>
-            (filters.selectedHomeWorld === '' || character.homeWorldName === filters.selectedHomeWorld) &&
-            (filters.selectedFilm === '' || character.filmsData.some(film => film.title === filters.selectedFilm)) &&
-            (filters.selectedSpecies === '' || character.speciesData.some(species => species.name === filters.selectedSpecies)) &&
-            character.name.toLowerCase().includes(characterName)
-        );
-    }, [searchInput, filters, characters]);
+  const clearFilters = () => {
+    setFilters((prevFilters) => ({
+      ...prevFilters,
+      selectedHomeWorld: "",
+      selectedFilm: "",
+      selectedSpecies: "",
+    }));
+    setSearchInput("");
+  };
 
-    const handleCardClick = (character) => {
-        setSelectedCharacter(character);
-        setIsModalOpen(true);
-    };
+  const handlePageChange = (direction) => {
+    if (direction === "next" && currentPage < totalPages) {
+      setCurrentPage((prevPage) => prevPage + 1);
+    } else if (direction === "prev" && currentPage > 1) {
+      setCurrentPage((prevPage) => prevPage - 1);
+    }
+  };
 
-    const closeModal = () => {
-        setIsModalOpen(false);
-        setSelectedCharacter(null);
-    };
-
-    const handleFilterChange = (key, value) => {
-        setFilters(prevFilters => ({
-            ...prevFilters,
-            [key]: value
-        }));
-    };
-
-    const clearFilters = () => {
-        setFilters(prevFilters => ({
-            ...prevFilters,
-            selectedHomeWorld: '',
-            selectedFilm: '',
-            selectedSpecies: ''
-        }));
-        setSearchInput('');
-    };
-
+  if (isFetching) {
     return (
-        <div className="bg-slate-200 p-6 shadow-lg">
-            <h1 className="text-3xl font-bold text-center mb-6">Star Wars Characters</h1>
-            <div className="mb-4 flex justify-center">
-                <Input
-                    value={searchInput}
-                    onChange={setSearchInput}
-                />
-                <button 
-                    onClick={clearFilters}
-                    className="ml-4 p-2 border rounded bg-red-500 text-white"
-                >
-                    Clear Filters
-                </button>
-            </div>
-            {isLoading ? (
-                <div className='flex justify-center'>
-                    <div className='flex-cols justify-center'>
-                        <h2 className='font-bold'>Loading Data...</h2>
-                        <br />
-                        <Loader />
-                    </div>
-                </div>
-            ) : (
-                <div>
-                    <div className="flex justify-center bg-my-white mt-6 mx-8">
-                        <div className="flex w-full max-w-2xl space-x-4 px-4 justify-center">
-                            <Dropdown
-                                options={filters.homeWorldNames}
-                                selectedOption={filters.selectedHomeWorld}
-                                onSelect={value => handleFilterChange('selectedHomeWorld', value)}
-                            />
-                            <Dropdown
-                                options={filters.filmTitles}
-                                selectedOption={filters.selectedFilm}
-                                onSelect={value => handleFilterChange('selectedFilm', value)}
-                            />
-                            <Dropdown
-                                options={filters.speciesNames}
-                                selectedOption={filters.selectedSpecies}
-                                onSelect={value => handleFilterChange('selectedSpecies', value)}
-                            />
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                        {filteredCharacters.length === 0 ? (
-                            <div className="col-span-full text-center text-gray-700 font-semibold">
-                                Can't fetch items
-                            </div>
-                        ) : (
-                            filteredCharacters.map((character, index) => (
-                                <Card
-                                    key={index}
-                                    name={character.name}
-                                    imageUrl={getRandomImage()}
-                                    skinColor={character.skinColor}
-                                    onClick={() => handleCardClick(character)}
-                                    className="transition-transform transform hover:scale-105 hover:shadow-lg"
-                                />
-                            ))
-                        )}
-                    </div>
-                </div>
-            )}
-            {isModalOpen && (
-                <Modal character={selectedCharacter} onClose={closeModal} />
-            )}
+      <div className="flex justify-center">
+        <div className="flex-cols justify-center">
+          <h2 className="font-bold">Loading Data...</h2>
+          <Loader />
         </div>
+      </div>
     );
+  }
+
+  if (error) {
+    return (
+      <div className="flex justify-center">
+        <div className="flex-cols justify-center">
+          <h2 className="font-bold text-red-500">{error.message}</h2>
+        </div>
+      </div>
+    );
+  }
+  console.log(filteredCharacters)
+
+  return (
+    <div className="bg-slate-200 shadow-lg">
+      <Header />
+      <h1 className="text-3xl font-bold text-center mb-6">
+        Star Wars Characters
+      </h1>
+      <SearchBar
+        searchInput={searchInput}
+        onSearchChange={setSearchInput}
+        onClearFilters={clearFilters}
+      />
+      <Filters
+        filters={filters}
+        onFilterChange={handleFilterChange}
+      />
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+        {filteredCharacters.length === 0 ? (
+          <div className="col-span-full text-center text-gray-700 font-semibold">
+            No characters found
+          </div>
+        ) : (
+          filteredCharacters.map((character, index) => (
+            <Card
+              key={index}
+              name={character.name}
+              skinColor={character.skinColor}
+              imageUrl={getRandomImage(1, 59)}
+              onClick={() => handleCardClick(character)}
+            />
+          ))
+        )}
+      </div>
+      <Pagination
+        currentPage={currentPage}
+        totalPages={totalPages}
+        onPageChange={handlePageChange}
+      />
+      {isModalOpen && (
+        <Modal character={selectedCharacter} onClose={handleCloseModal} />
+      )}
+    </div>
+  );
 };
 
 export default Home;

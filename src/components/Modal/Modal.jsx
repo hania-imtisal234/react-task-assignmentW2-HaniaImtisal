@@ -1,8 +1,6 @@
 import React from 'react';
-
 const Modal = ({ character, onClose }) => {
     if (!character) return null;
-
     return (
         <div className="fixed inset-0 bg-gray-900 bg-opacity-50 flex justify-center items-center z-50">
             <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full relative">
@@ -13,6 +11,7 @@ const Modal = ({ character, onClose }) => {
                 <p><strong>Height:</strong> {character.height} meters</p>
                 <p><strong>Mass:</strong> {character.mass} kg</p>
                 <p><strong>Date Added:</strong> {character.created}</p>
+                <p><strong>Number of Films:</strong> {character.films}</p>
                 <p><strong>Number of Films:</strong> {character.filmsLength}</p>
                 <p><strong>Birth Year:</strong> {character.birth_year}</p>
                 <h3 className="text-xl font-bold mt-4">Home World</h3>
@@ -24,5 +23,4 @@ const Modal = ({ character, onClose }) => {
         </div>
     );
 };
-
 export default Modal;
